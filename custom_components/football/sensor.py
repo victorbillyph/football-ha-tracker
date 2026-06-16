@@ -12,9 +12,13 @@ from .const import DOMAIN, SENSOR_TYPES
 from .coordinator import FootballDataUpdateCoordinator
 
 STATUS_LABELS = {
-    "NS": "Not Started",
+    "NS": "Scheduled",
+    "PRE_GAME": "Pre-game",
     "LIVE": "Live",
+    "HALF_TIME": "Half Time",
     "FT": "Finished",
+    "POSTPONED": "Postponed",
+    "CANCELLED": "Cancelled",
 }
 
 

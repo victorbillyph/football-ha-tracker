@@ -16,12 +16,12 @@ _LOGGER = logging.getLogger(__name__)
 
 STATUS_MAP = {
     "IN_PLAY": "LIVE",
-    "PAUSED": "LIVE",
+    "PAUSED": "HALF_TIME",
     "FINISHED": "FT",
     "SCHEDULED": "NS",
     "TIMED": "NS",
-    "POSTPONED": "NS",
-    "CANCELLED": "FT",
+    "POSTPONED": "POSTPONED",
+    "CANCELLED": "CANCELLED",
     "SUSPENDED": "LIVE",
 }
 
@@ -165,7 +165,18 @@ class FootballDataUpdateCoordinator(
 
         raw_status = match.get("status", "")
         status = STATUS_MAP.get(raw_status, "NS")
-        is_live = status == "LIVE"
+        is_live = status in ("LIVE", "HALF_TIME")
+
+        if status == "NS" and match.get("utcDate"):
+            try:
+                kickoff = datetime.fromisoformat(
+                    match["utcDate"].replace("Z", "+00:00")
+                )
+                mins_until = (kickoff - datetime.now(timezone.utc)).total_seconds() / 60
+                if 0 <= mins_until <= 60:
+                    status = "PRE_GAME"
+            except (ValueError, AttributeError):
+                pass
 
         score = match.get("score", {})
         full_time = score.get("fullTime", {}) or {}
