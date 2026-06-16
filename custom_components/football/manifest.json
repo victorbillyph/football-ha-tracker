@@ -1,12 +1,12 @@
 {
   "domain": "football",
   "name": "Football Match Tracker",
-  "codeowners": [],
+  "codeowners": ["@victorbillyph"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/user/football-homeassistant-integration",
+  "documentation": "https://github.com/victorbillyph/football-ha-tracker",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/user/football-homeassistant-integration/issues",
+  "issue_tracker": "https://github.com/victorbillyph/football-ha-tracker/issues",
   "requirements": [],
   "version": "1.0.0"
 }
