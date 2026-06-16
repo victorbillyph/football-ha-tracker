@@ -1,0 +1,53 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Football Match Tracker",
+        "description": "Choose a competition to track teams from.",
+        "data": {
+          "mode": "Setup mode"
+        }
+      },
+      "popular_league": {
+        "title": "Select Competition",
+        "description": "Choose a popular competition and season.",
+        "data": {
+          "shortcut": "Competition",
+          "season": "Season"
+        }
+      },
+      "custom_league": {
+        "title": "Custom League",
+        "description": "Enter a league shortcut and season.\n\nCommon shortcuts: bl1 (Bundesliga), epl (Premier League), wm26 (World Cup 2026), em (Euro 2024), CA2024 (Copa America 2024)",
+        "data": {
+          "shortcut": "League shortcut",
+          "season": "Season (year)"
+        }
+      },
+      "pick_teams": {
+        "title": "Select Teams",
+        "description": "Select teams to track from {league}.",
+        "data": {
+          "team_ids": "Teams"
+        }
+      }
+    },
+    "error": {
+      "league_not_found": "League not found. Check the shortcut and season.",
+      "cannot_fetch_teams": "Could not fetch teams for this league."
+    },
+    "abort": {
+      "no_teams_selected": "No teams were selected."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manage",
+        "data": {
+          "action": "Action"
+        }
+      }
+    }
+  }
+}
