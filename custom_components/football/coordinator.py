@@ -147,7 +147,49 @@ class FootballDataUpdateCoordinator(
         if not match:
             return None
 
-        return self._extract_data(match, team_id, team_name, league_name)
+        data = self._extract_data(match, team_id, team_name, league_name)
+
+        next_upcoming_matches = []
+        for m in relevant:
+            if m.get("status") in ("FINISHED", "CANCELLED"):
+                continue
+            if m is match and match.get("status") in ("IN_PLAY", "PAUSED", "SUSPENDED"):
+                continue
+            mt = m.get("utcDate")
+            if not mt:
+                continue
+            try:
+                dt = datetime.fromisoformat(mt.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                continue
+            if dt > now:
+                next_upcoming_matches.append((dt, m))
+
+        if next_upcoming_matches:
+            next_upcoming_matches.sort(key=lambda x: x[0])
+            _, next_match = next_upcoming_matches[0]
+            nmt = next_match["utcDate"]
+            try:
+                ndt = datetime.fromisoformat(nmt.replace("Z", "+00:00"))
+                delta = ndt - now
+                days = delta.days
+                hours = delta.seconds // 3600
+                if days > 0:
+                    data["days_until_next"] = f"{days}d {hours}h"
+                elif hours > 0:
+                    data["days_until_next"] = f"{hours}h"
+                else:
+                    data["days_until_next"] = "< 1h"
+                data["next_match_date"] = nmt
+                ht = next_match.get("homeTeam", {})
+                at = next_match.get("awayTeam", {})
+                is_next_home = ht.get("id") == team_id
+                n_opp = at if is_next_home else ht
+                data["next_opponent"] = n_opp.get("name", "")
+            except (ValueError, AttributeError):
+                pass
+
+        return data
 
     @staticmethod
     def _extract_data(

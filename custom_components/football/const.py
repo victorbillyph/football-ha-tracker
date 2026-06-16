@@ -20,4 +20,7 @@ SENSOR_TYPES = {
     "minute": {"name": "Minute", "icon": "mdi:clock-outline"},
     "round": {"name": "Round", "icon": "mdi:tournament"},
     "league": {"name": "League", "icon": "mdi:trophy"},
+    "days_until_next": {"name": "Days Until Next", "icon": "mdi:calendar-clock"},
+    "next_match_date": {"name": "Next Match Date", "icon": "mdi:calendar"},
+    "next_opponent": {"name": "Next Opponent", "icon": "mdi:account-arrow-right"},
 }

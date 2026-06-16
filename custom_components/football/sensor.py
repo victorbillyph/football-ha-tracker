@@ -92,6 +92,9 @@ class FootballSensor(CoordinatorEntity, SensorEntity):
             return {}
         return {
             k: data[k]
-            for k in ("fixture_id", "timestamp", "date", "team_name", "is_live")
+            for k in (
+                "fixture_id", "timestamp", "date", "team_name", "is_live",
+                "next_match_date", "days_until_next", "next_opponent",
+            )
             if k in data
         }
