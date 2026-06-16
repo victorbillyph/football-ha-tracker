@@ -94,7 +94,9 @@ class FootballSensor(CoordinatorEntity, SensorEntity):
             k: data[k]
             for k in (
                 "fixture_id", "timestamp", "date", "team_name", "is_live",
+                "team_crest", "opponent_crest",
                 "next_match_date", "days_until_next", "next_opponent",
+                "next_opponent_crest",
             )
             if k in data
         }

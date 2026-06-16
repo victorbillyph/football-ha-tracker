@@ -186,6 +186,7 @@ class FootballDataUpdateCoordinator(
                 is_next_home = ht.get("id") == team_id
                 n_opp = at if is_next_home else ht
                 data["next_opponent"] = n_opp.get("name", "")
+                data["next_opponent_crest"] = n_opp.get("crest", "")
             except (ValueError, AttributeError):
                 pass
 
@@ -241,7 +242,9 @@ class FootballDataUpdateCoordinator(
             "date": match.get("utcDate"),
             "status": status,
             "team_name": our.get("name", team_name),
+            "team_crest": our.get("crest", ""),
             "opponent_name": opponent.get("name", ""),
+            "opponent_crest": opponent.get("crest", ""),
             "our_score": our_score,
             "opponent_score": opp_score,
             "minute": None,
