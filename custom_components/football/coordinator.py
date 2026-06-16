@@ -14,58 +14,35 @@ from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LIVE_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def _get_match_status(match: dict[str, Any]) -> str:
-    if match.get("matchIsFinished"):
-        return "FT"
-    match_time = match.get("matchDateTimeUTC")
-    if not match_time:
-        return "NS"
-    try:
-        dt = datetime.fromisoformat(match_time.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
-        return "NS"
-    now = datetime.now(timezone.utc)
-    if dt > now:
-        return "NS"
-    goals = match.get("goals", [])
-    if goals:
-        return "LIVE"
-    return "NS"
+STATUS_MAP = {
+    "IN_PLAY": "LIVE",
+    "PAUSED": "LIVE",
+    "FINISHED": "FT",
+    "SCHEDULED": "NS",
+    "TIMED": "NS",
+    "POSTPONED": "NS",
+    "CANCELLED": "FT",
+    "SUSPENDED": "LIVE",
+}
 
 
-def _get_match_minute(match: dict[str, Any]) -> int | None:
-    goals = match.get("goals", [])
-    if not goals:
-        return None
-    last_goal = goals[-1]
-    minute = last_goal.get("matchMinute", 0)
-    overtime = last_goal.get("isOvertime", False)
-    comment = last_goal.get("comment", "")
-    if overtime:
-        return minute if not comment else None
-    return minute
+def _format_group(group: str | None) -> str:
+    if not group:
+        return ""
+    g = group.replace("GROUP_", "Group ").replace("_", " ")
+    return g.title().strip()
 
 
-def _get_final_score(match: dict[str, Any]) -> tuple[int | None, int | None]:
-    results = match.get("matchResults", [])
-    for r in results:
-        if r.get("resultTypeID") == 2:
-            return r.get("pointsTeam1"), r.get("pointsTeam2")
-    if results:
-        return results[0].get("pointsTeam1"), results[0].get("pointsTeam2")
-    return None, None
+def _format_stage(stage: str | None) -> str:
+    if not stage:
+        return ""
+    s = stage.replace("_", " ").title()
+    return s
 
 
-def _get_live_score(match: dict[str, Any]) -> tuple[int | None, int | None]:
-    goals = match.get("goals", [])
-    if not goals:
-        return None, None
-    og = goals[-1]
-    return og.get("scoreTeam1"), og.get("scoreTeam2")
-
-
-class FootballDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any] | None]]):
+class FootballDataUpdateCoordinator(
+    DataUpdateCoordinator[dict[str, dict[str, Any] | None]]
+):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.entry = entry
         self.api = FootballApiClient(async_get_clientsession(hass))
@@ -84,20 +61,19 @@ class FootballDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, An
 
         for entry_conf in entries:
             shortcut = entry_conf["league_shortcut"]
-            season = entry_conf["league_season"]
-            league_name = entry_conf.get("league_name", f"{shortcut} {season}")
+            league_name = entry_conf.get("league_name", shortcut)
 
             try:
-                matches = await self.api.get_match_data(shortcut, season)
+                matches = await self.api.get_match_data(shortcut)
             except Exception as err:
-                _LOGGER.error("Error fetching %s/%s: %s", shortcut, season, err)
+                _LOGGER.error("Error fetching %s: %s", shortcut, err)
                 for team in entry_conf.get("teams", []):
-                    key = f"{shortcut}_{season}_{team['team_id']}"
+                    key = f"{shortcut}_{team['team_id']}"
                     results[key] = {"error": str(err)}
                 continue
 
             for team in entry_conf.get("teams", []):
-                key = f"{shortcut}_{season}_{team['team_id']}"
+                key = f"{shortcut}_{team['team_id']}"
                 data = self._process_team_matches(
                     matches, team["team_id"], team["team_name"], league_name
                 )
@@ -122,9 +98,9 @@ class FootballDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, An
         relevant = []
 
         for match in matches:
-            t1 = match.get("team1", {})
-            t2 = match.get("team2", {})
-            if t1.get("teamId") != team_id and t2.get("teamId") != team_id:
+            ht = match.get("homeTeam", {})
+            at = match.get("awayTeam", {})
+            if ht.get("id") != team_id and at.get("id") != team_id:
                 continue
             relevant.append(match)
 
@@ -136,25 +112,35 @@ class FootballDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, An
         latest = None
 
         for match in relevant:
-            status = _get_match_status(match)
-            match_time = match.get("matchDateTimeUTC")
-            try:
-                dt = datetime.fromisoformat(match_time.replace("Z", "+00:00"))
-            except (ValueError, AttributeError, KeyError):
-                dt = None
+            status = match.get("status", "")
+            match_time = match.get("utcDate")
 
-            if status == "LIVE":
+            if status in ("IN_PLAY", "PAUSED", "SUSPENDED"):
                 live = match
-            elif status == "NS" and dt:
+            elif status in ("SCHEDULED", "TIMED", "POSTPONED"):
+                if not match_time:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(match_time.replace("Z", "+00:00"))
+                except (ValueError, AttributeError):
+                    continue
                 if upcoming is None or dt < datetime.fromisoformat(
-                    upcoming["matchDateTimeUTC"].replace("Z", "+00:00")
+                    upcoming["utcDate"].replace("Z", "+00:00")
                 ):
                     upcoming = match
-            elif status == "FT":
-                if latest is None or (dt and latest.get("matchDateTimeUTC")
+            elif status in ("FINISHED", "CANCELLED"):
+                if not match_time:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(match_time.replace("Z", "+00:00"))
+                except (ValueError, AttributeError):
+                    continue
+                if latest is None or (
+                    latest.get("utcDate")
                     and dt > datetime.fromisoformat(
-                        latest["matchDateTimeUTC"].replace("Z", "+00:00")
-                    )):
+                        latest["utcDate"].replace("Z", "+00:00")
+                    )
+                ):
                     latest = match
 
         match = live or upcoming or latest
@@ -170,31 +156,42 @@ class FootballDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, An
         team_name: str,
         league_name: str,
     ) -> dict[str, Any]:
-        is_home = match["team1"]["teamId"] == team_id
-        our = match["team1"] if is_home else match["team2"]
-        opponent = match["team2"] if is_home else match["team1"]
-        status = _get_match_status(match)
+        ht = match.get("homeTeam", {})
+        at = match.get("awayTeam", {})
+
+        is_home = ht.get("id") == team_id
+        our = ht if is_home else at
+        opponent = at if is_home else ht
+
+        raw_status = match.get("status", "")
+        status = STATUS_MAP.get(raw_status, "NS")
         is_live = status == "LIVE"
 
-        if is_live:
-            our_score, opp_score = _get_live_score(match)
+        score = match.get("score", {})
+        full_time = score.get("fullTime", {}) or {}
+        if is_home:
+            our_score = full_time.get("home")
+            opp_score = full_time.get("away")
         else:
-            our_score, opp_score = _get_final_score(match)
+            our_score = full_time.get("away")
+            opp_score = full_time.get("home")
 
-        minute = _get_match_minute(match)
-        group = match.get("group", {})
-        round_name = group.get("groupName", "") if group else ""
+        group = match.get("group", "")
+        stage = match.get("stage", "")
+        round_name = _format_group(group)
+        if stage and not group:
+            round_name = _format_stage(stage)
 
         return {
-            "fixture_id": match.get("matchID"),
-            "timestamp": match.get("matchDateTimeUTC"),
-            "date": match.get("matchDateTime"),
+            "fixture_id": match.get("id"),
+            "timestamp": match.get("utcDate"),
+            "date": match.get("utcDate"),
             "status": status,
-            "team_name": our.get("teamName", team_name),
-            "opponent_name": opponent.get("teamName", ""),
+            "team_name": our.get("name", team_name),
+            "opponent_name": opponent.get("name", ""),
             "our_score": our_score,
             "opponent_score": opp_score,
-            "minute": minute,
+            "minute": None,
             "round": round_name,
             "league": league_name,
             "is_live": is_live,

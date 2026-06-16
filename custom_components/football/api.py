@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
@@ -12,33 +11,34 @@ class FootballApiClient:
     def __init__(self, session: aiohttp.ClientSession) -> None:
         self._session = session
 
-    async def _request(self, endpoint: str) -> Any:
-        url = f"{BASE_URL}/{endpoint}"
-        async with self._session.get(url) as resp:
+    async def _request(self, params: dict[str, str]) -> Any:
+        async with self._session.get(BASE_URL, params=params) as resp:
             resp.raise_for_status()
             return await resp.json()
 
-    async def get_teams(self, shortcut: str, season: int) -> list[dict[str, Any]]:
-        return await self._request(
-            f"getavailableteams/{shortcut}/{season}"
-        )
+    async def get_teams(self, shortcut: str) -> list[dict[str, Any]]:
+        data = await self._request({
+            "data": "results",
+            "category": "tables",
+            "league": shortcut,
+        })
+        teams: list[dict[str, Any]] = []
+        for standing in data.get("data", {}).get("standings", []):
+            for entry in standing.get("table", []):
+                team = entry["team"]
+                teams.append({
+                    "teamId": team["id"],
+                    "teamName": team["name"],
+                })
+        return teams
 
-    async def get_match_data(
-        self, shortcut: str, season: int
-    ) -> list[dict[str, Any]]:
-        return await self._request(f"getmatchdata/{shortcut}/{season}")
-
-    async def get_current_group(self, shortcut: str) -> dict[str, Any] | None:
-        try:
-            return await self._request(f"getcurrentgroup/{shortcut}")
-        except Exception:
-            return None
-
-    async def validate_league(
-        self, shortcut: str, season: int
-    ) -> bool:
-        try:
-            data = await self.get_teams(shortcut, season)
-            return isinstance(data, list)
-        except Exception:
-            return False
+    async def get_match_data(self, shortcut: str) -> list[dict[str, Any]]:
+        data = await self._request({
+            "data": "results",
+            "category": "scores",
+            "league": shortcut,
+        })
+        matches: list[dict[str, Any]] = []
+        for status in ("live", "scheduled", "finished"):
+            matches.extend(data.get("data", {}).get(status, []))
+        return matches

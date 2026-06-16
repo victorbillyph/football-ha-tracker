@@ -17,17 +17,15 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 POPULAR_LEAGUES = {
-    "wm26": "World Cup 2026",
-    "em": "UEFA EURO 2024",
-    "CA2024": "Copa América 2024",
-    "unl2024": "Nations League 2024/25",
-    "bl1": "Bundesliga",
-    "epl": "Premier League",
-    "laliga1": "LaLiga",
-    "cl1": "Champions League",
+    "WC": "World Cup 2026",
+    "EC": "European Championship",
+    "CL": "Champions League",
+    "BL1": "Bundesliga",
+    "PL": "Premier League",
+    "PD": "La Liga",
+    "SA": "Serie A",
+    "FL1": "Ligue 1",
 }
-
-SEASONS = ["2024", "2025", "2026"]
 
 
 def _entry_label(entry: dict) -> str:
@@ -37,7 +35,7 @@ def _entry_label(entry: dict) -> str:
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -67,7 +65,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         if user_input is not None:
             self._league_shortcut = user_input["shortcut"]
-            self._league_season = int(user_input["season"])
             self._league_name = POPULAR_LEAGUES.get(
                 self._league_shortcut, self._league_shortcut
             )
@@ -85,14 +82,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
-                vol.Required("season"): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            {"value": s, "label": s} for s in SEASONS
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
             }),
         )
 
@@ -101,35 +90,25 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            shortcut = user_input["shortcut"].strip()
-            season = int(user_input["season"])
+            shortcut = user_input["shortcut"].strip().upper()
             session = async_get_clientsession(self.hass)
             client = FootballApiClient(session)
             try:
-                teams = await client.get_teams(shortcut, season)
+                teams = await client.get_teams(shortcut)
                 if isinstance(teams, list) and len(teams) > 0:
                     self._league_shortcut = shortcut
-                    self._league_season = season
                     self._league_name = shortcut
                     self._cached_teams = teams
                     return await self._finish_team_selection()
                 errors["base"] = "league_not_found"
             except Exception as ex:
-                _LOGGER.error("Error validating league %s/%s: %s", shortcut, season, ex)
+                _LOGGER.error("Error validating league %s: %s", shortcut, ex)
                 errors["base"] = "league_not_found"
 
         return self.async_show_form(
             step_id="custom_league",
             data_schema=vol.Schema({
                 vol.Required("shortcut"): selector.TextSelector(),
-                vol.Required("season"): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            {"value": s, "label": s} for s in SEASONS
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
             }),
             errors=errors,
         )
@@ -138,7 +117,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         session = async_get_clientsession(self.hass)
         client = FootballApiClient(session)
         try:
-            teams = await client.get_teams(self._league_shortcut, self._league_season)
+            teams = await client.get_teams(self._league_shortcut)
             self._cached_teams = teams
         except Exception as ex:
             _LOGGER.error("Error fetching teams: %s", ex)
@@ -224,19 +203,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors={"base": "no_teams_selected"},
             )
 
-        team_ids = set(str(s) for s in selected)
+        team_ids = set(int(s) for s in selected)
         teams_conf = []
         for t in self._cached_teams:
-            tid = str(t["teamId"])
+            tid = t["teamId"]
             if tid in team_ids:
-                teams_conf.append({"team_id": t["teamId"], "team_name": t.get("teamName", "")})
+                teams_conf.append({"team_id": tid, "team_name": t.get("teamName", "")})
 
         if not teams_conf:
             return self.async_abort(reason="no_teams_selected")
 
         entry_data = {
             "league_shortcut": self._league_shortcut,
-            "league_season": self._league_season,
             "league_name": self._league_name,
             "teams": teams_conf,
         }
@@ -311,7 +289,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         if user_input is not None:
             self._league_shortcut = user_input["shortcut"]
-            self._league_season = int(user_input["season"])
             self._league_name = POPULAR_LEAGUES.get(
                 self._league_shortcut, self._league_shortcut
             )
@@ -328,14 +305,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
-                vol.Required("season"): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            {"value": s, "label": s} for s in SEASONS
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
             }),
         )
 
@@ -344,34 +313,24 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            shortcut = user_input["shortcut"].strip()
-            season = int(user_input["season"])
+            shortcut = user_input["shortcut"].strip().upper()
             session = async_get_clientsession(self.hass)
             client = FootballApiClient(session)
             try:
-                teams = await client.get_teams(shortcut, season)
+                teams = await client.get_teams(shortcut)
                 if isinstance(teams, list) and len(teams) > 0:
                     self._league_shortcut = shortcut
-                    self._league_season = season
                     self._league_name = shortcut
                     self._cached_teams = teams
                     return await self._finish_team_selection()
                 errors["base"] = "league_not_found"
             except Exception as ex:
-                _LOGGER.error("Error validating league %s/%s: %s", shortcut, season, ex)
+                _LOGGER.error("Error validating league %s: %s", shortcut, ex)
                 errors["base"] = "league_not_found"
         return self.async_show_form(
             step_id="custom_league",
             data_schema=vol.Schema({
                 vol.Required("shortcut"): selector.TextSelector(),
-                vol.Required("season"): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            {"value": s, "label": s} for s in SEASONS
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
             }),
             errors=errors,
         )
@@ -380,7 +339,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         session = async_get_clientsession(self.hass)
         client = FootballApiClient(session)
         try:
-            teams = await client.get_teams(self._league_shortcut, self._league_season)
+            teams = await client.get_teams(self._league_shortcut)
             self._cached_teams = teams
         except Exception as ex:
             _LOGGER.error("Error fetching teams: %s", ex)
@@ -466,12 +425,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 errors={"base": "no_teams_selected"},
             )
 
-        team_ids = set(str(s) for s in selected)
+        team_ids = set(int(s) for s in selected)
         teams_conf = []
         for t in self._cached_teams:
-            tid = str(t["teamId"])
+            tid = t["teamId"]
             if tid in team_ids:
-                teams_conf.append({"team_id": t["teamId"], "team_name": t.get("teamName", "")})
+                teams_conf.append({"team_id": tid, "team_name": t.get("teamName", "")})
 
         if not teams_conf:
             return self.async_abort(reason="no_teams_selected")
@@ -479,7 +438,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         entries = list(self.entry.data.get("entries", []))
         entries.append({
             "league_shortcut": self._league_shortcut,
-            "league_season": self._league_season,
             "league_name": self._league_name,
             "teams": teams_conf,
         })

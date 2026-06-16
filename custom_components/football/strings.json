@@ -10,18 +10,16 @@
       },
       "popular_league": {
         "title": "Select Competition",
-        "description": "Choose a popular competition and season.",
+        "description": "Choose a competition.",
         "data": {
-          "shortcut": "Competition",
-          "season": "Season"
+          "shortcut": "Competition"
         }
       },
       "custom_league": {
         "title": "Custom League",
-        "description": "Enter a league shortcut and season using the OpenLigaDB API.\n\nCommon shortcuts:\n- wm26 = World Cup 2026\n- em = UEFA EURO 2024\n- CA2024 = Copa América 2024\n- bl1 = Bundesliga\n- epl = Premier League\n- cl1 = Champions League",
+        "description": "Enter a league code using the SportSRC API.\n\nCommon codes:\n- WC = World Cup\n- EC = European Championship\n- CL = Champions League\n- PL = Premier League\n- BL1 = Bundesliga\n- PD = La Liga\n- SA = Serie A\n- FL1 = Ligue 1",
         "data": {
-          "shortcut": "League shortcut",
-          "season": "Season"
+          "shortcut": "League code"
         }
       },
       "pick_teams": {
@@ -33,8 +31,8 @@
       }
     },
     "error": {
-      "league_not_found": "League not found. Check the shortcut and season.",
-      "cannot_fetch_teams": "Could not fetch teams for this league. Check the shortcut and season, or try a different competition.",
+      "league_not_found": "League not found. Check the code.",
+      "cannot_fetch_teams": "Could not fetch teams for this league. Check the code or try a different competition.",
       "no_teams_selected": "Select at least one team to track."
     }
   },

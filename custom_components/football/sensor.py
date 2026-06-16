@@ -28,9 +28,8 @@ async def async_setup_entry(
 
     for entry_conf in entry.data.get("entries", []):
         shortcut = entry_conf["league_shortcut"]
-        season = entry_conf["league_season"]
         for team in entry_conf.get("teams", []):
-            team_key = f"{shortcut}_{season}_{team['team_id']}"
+            team_key = f"{shortcut}_{team['team_id']}"
             label = team["team_name"]
             for sensor_type in SENSOR_TYPES:
                 entities.append(
