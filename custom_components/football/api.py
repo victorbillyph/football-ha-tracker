@@ -38,7 +38,7 @@ class FootballApiClient:
         self, shortcut: str, season: int
     ) -> bool:
         try:
-            data = await self.get_match_data(shortcut, season)
+            data = await self.get_teams(shortcut, season)
             return isinstance(data, list)
         except Exception:
             return False

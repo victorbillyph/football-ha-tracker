@@ -18,10 +18,10 @@
       },
       "custom_league": {
         "title": "Custom League",
-        "description": "Enter a league shortcut and season.\n\nCommon shortcuts: bl1 (Bundesliga), epl (Premier League), wm26 (World Cup 2026), em (Euro 2024), CA2024 (Copa America 2024)",
+        "description": "Enter a league shortcut and season using the OpenLigaDB API.\n\nCommon shortcuts:\n- wm26 = World Cup 2026\n- em = UEFA EURO 2024\n- CA2024 = Copa América 2024\n- bl1 = Bundesliga\n- epl = Premier League\n- cl1 = Champions League",
         "data": {
           "shortcut": "League shortcut",
-          "season": "Season (year)"
+          "season": "Season"
         }
       },
       "pick_teams": {
@@ -34,20 +34,37 @@
     },
     "error": {
       "league_not_found": "League not found. Check the shortcut and season.",
-      "cannot_fetch_teams": "Could not fetch teams for this league."
-    },
-    "abort": {
-      "no_teams_selected": "No teams were selected."
+      "cannot_fetch_teams": "Could not fetch teams for this league. Check the shortcut and season, or try a different competition.",
+      "no_teams_selected": "Select at least one team to track."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Manage",
+        "title": "Manage Football Tracker",
+        "description": "Add or remove teams to track.",
         "data": {
           "action": "Action"
         }
+      },
+      "add_league": {
+        "title": "Add League",
+        "description": "",
+        "data": {
+          "mode": "Choose league type"
+        }
+      },
+      "remove": {
+        "title": "Remove Entry",
+        "description": "Select entries to remove.",
+        "data": {
+          "indices": "Entries"
+        }
       }
+    },
+    "error": {
+      "cannot_fetch_teams": "Could not fetch teams for this league.",
+      "no_teams_selected": "Select at least one team to track."
     }
   }
 }

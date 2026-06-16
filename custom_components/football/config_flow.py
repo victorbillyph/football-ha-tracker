@@ -137,70 +137,110 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_pick_teams(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        errors: dict[str, str] = {}
+
         if user_input is not None:
             selected = user_input.get("team_ids", [])
-            teams_conf = [
-                {"team_id": t["teamId"], "team_name": t["teamName"]}
-                for t in self._cached_teams
-                if str(t["teamId"]) in selected
-            ]
-            if not teams_conf:
-                return self.async_abort(reason="no_teams_selected")
+            if not selected:
+                errors["base"] = "no_teams_selected"
+            else:
+                teams_conf = [
+                    {"team_id": t["teamId"], "team_name": t["teamName"]}
+                    for t in self._cached_teams
+                    if str(t["teamId"]) in selected
+                ]
+                if not teams_conf:
+                    errors["base"] = "no_teams_selected"
+                else:
+                    entry_data = {
+                        "league_shortcut": self._shortcut,
+                        "league_season": self._season,
+                        "league_name": self._league_name,
+                        "teams": teams_conf,
+                    }
 
-            entry_data = {
-                "league_shortcut": self._shortcut,
-                "league_season": self._season,
-                "league_name": self._league_name,
-                "teams": teams_conf,
-            }
+                    if self.source == config_entries.SOURCE_OPTIONS_FLOW:
+                        entries = list(self.config_entry.data.get("entries", []))
+                        entries.append(entry_data)
+                        self.hass.config_entries.async_update_entry(
+                            self.config_entry,
+                            data={**self.config_entry.data, "entries": entries},
+                        )
+                        return self.async_create_entry(title="", data={})
+
+                    return self.async_create_entry(
+                        title=f"Football ({self._league_name})",
+                        data={"entries": [entry_data]},
+                    )
+
+        if not errors:
+            session = async_get_clientsession(self.hass)
+            client = FootballApiClient(session)
+            try:
+                teams = await client.get_teams(self._shortcut, self._season)
+            except Exception:
+                errors["base"] = "cannot_fetch_teams"
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required("mode"): selector.SelectSelector(
+                                selector.SelectSelectorConfig(
+                                    options=[
+                                        {"value": "popular", "label": "Popular competition"},
+                                        {"value": "custom", "label": "Custom league"},
+                                    ],
+                                    mode=selector.SelectSelectorMode.LIST,
+                                )
+                            )
+                        }
+                    ),
+                    errors=errors,
+                )
+
+            teams = [t for t in teams if t.get("teamName")]
+            self._cached_teams = teams
 
             if self.source == config_entries.SOURCE_OPTIONS_FLOW:
-                entries = list(self.config_entry.data.get("entries", []))
-                entries.append(entry_data)
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry,
-                    data={**self.config_entry.data, "entries": entries},
-                )
-                return self.async_create_entry(title="", data={})
+                existing_ids = set()
+                for e in self.config_entry.data.get("entries", []):
+                    if (
+                        e.get("league_shortcut") == self._shortcut
+                        and e.get("league_season") == self._season
+                    ):
+                        for t in e.get("teams", []):
+                            existing_ids.add(t["team_id"])
+            else:
+                existing_ids = set()
 
-            return self.async_create_entry(
-                title=f"Football ({self._league_name})",
-                data={"entries": [entry_data]},
-            )
+            options = [
+                {
+                    "value": str(t["teamId"]),
+                    "label": (
+                        f"{t['teamName']} ✓"
+                        if t["teamId"] in existing_ids
+                        else t["teamName"]
+                    ),
+                }
+                for t in teams
+            ]
 
-        session = async_get_clientsession(self.hass)
-        client = FootballApiClient(session)
-        try:
-            teams = await client.get_teams(self._shortcut, self._season)
-        except Exception:
-            return self.async_abort(reason="cannot_fetch_teams")
-
-        teams = [t for t in teams if t.get("teamName")]
-        self._cached_teams = teams
-
-        if self.source == config_entries.SOURCE_OPTIONS_FLOW:
-            existing_ids = set()
-            for e in self.config_entry.data.get("entries", []):
-                if (
-                    e.get("league_shortcut") == self._shortcut
-                    and e.get("league_season") == self._season
-                ):
-                    for t in e.get("teams", []):
-                        existing_ids.add(t["team_id"])
-        else:
-            existing_ids = set()
-
-        options = [
-            {
-                "value": str(t["teamId"]),
-                "label": (
-                    f"{t['teamName']} ✓"
-                    if t["teamId"] in existing_ids
-                    else t["teamName"]
+            return self.async_show_form(
+                step_id="pick_teams",
+                data_schema=vol.Schema(
+                    {
+                        vol.Optional("team_ids", default=[]): selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=options,
+                                mode=selector.SelectSelectorMode.DROPDOWN,
+                                multiple=True,
+                            )
+                        )
+                    }
                 ),
-            }
-            for t in teams
-        ]
+                description_placeholders={"league": self._league_name},
+                errors=errors,
+            )
 
         return self.async_show_form(
             step_id="pick_teams",
@@ -208,7 +248,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Optional("team_ids", default=[]): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=options,
+                            options=[
+                                {"value": str(t["teamId"]), "label": t["teamName"]}
+                                for t in self._cached_teams
+                            ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                             multiple=True,
                         )
@@ -216,6 +259,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             description_placeholders={"league": self._league_name},
+            errors=errors,
         )
 
     @staticmethod
@@ -355,36 +399,61 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_pick_teams(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        errors: dict[str, str] = {}
+
         if user_input is not None:
             selected = user_input.get("team_ids", [])
-            teams_conf = [
-                {"team_id": t["teamId"], "team_name": t["teamName"]}
-                for t in self._cached_teams
-                if str(t["teamId"]) in selected
-            ]
-            if not teams_conf:
-                return self.async_abort(reason="no_teams_selected")
+            if not selected:
+                errors["base"] = "no_teams_selected"
+            else:
+                teams_conf = [
+                    {"team_id": t["teamId"], "team_name": t["teamName"]}
+                    for t in self._cached_teams
+                    if str(t["teamId"]) in selected
+                ]
+                if not teams_conf:
+                    errors["base"] = "no_teams_selected"
+                else:
+                    entries = list(self.entry.data.get("entries", []))
+                    entries.append(
+                        {
+                            "league_shortcut": self._shortcut,
+                            "league_season": self._season,
+                            "league_name": self._league_name,
+                            "teams": teams_conf,
+                        }
+                    )
+                    self.hass.config_entries.async_update_entry(
+                        self.entry, data={**self.entry.data, "entries": entries}
+                    )
+                    return self.async_create_entry(title="", data={})
 
-            entries = list(self.entry.data.get("entries", []))
-            entries.append(
-                {
-                    "league_shortcut": self._shortcut,
-                    "league_season": self._season,
-                    "league_name": self._league_name,
-                    "teams": teams_conf,
-                }
-            )
-            self.hass.config_entries.async_update_entry(
-                self.entry, data={**self.entry.data, "entries": entries}
-            )
-            return self.async_create_entry(title="", data={})
+        if not errors:
+            session = async_get_clientsession(self.hass)
+            client = FootballApiClient(session)
+            try:
+                teams = await client.get_teams(self._shortcut, self._season)
+            except Exception:
+                errors["base"] = "cannot_fetch_teams"
 
-        session = async_get_clientsession(self.hass)
-        client = FootballApiClient(session)
-        try:
-            teams = await client.get_teams(self._shortcut, self._season)
-        except Exception:
-            return self.async_abort(reason="cannot_fetch_teams")
+        if errors:
+            return self.async_show_form(
+                step_id="add_league",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required("mode"): selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=[
+                                    {"value": "popular", "label": "Popular competition"},
+                                    {"value": "custom", "label": "Custom league"},
+                                ],
+                                mode=selector.SelectSelectorMode.LIST,
+                            )
+                        )
+                    }
+                ),
+                errors=errors,
+            )
 
         teams = [t for t in teams if t.get("teamName")]
         self._cached_teams = teams
