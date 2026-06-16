@@ -1,11 +1,7 @@
 {
   "name": "Football Match Tracker",
-  "filename": "football",
   "content_in_root": false,
-  "render_readme": true,
-  "domains": ["football"],
   "country": ["BR", "PT", "US", "DE", "GB"],
   "homeassistant": "2024.1.0",
-  "persistent_directory": false,
-  "iot_class": "cloud_polling"
+  "persistent_directory": false
 }
